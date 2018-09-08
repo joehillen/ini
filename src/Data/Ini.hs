@@ -69,8 +69,10 @@ import           Control.Monad
 import           Data.Attoparsec.Combinator
 import           Data.Attoparsec.Text
 import           Data.Char
-import           Data.HashMap.Strict        (HashMap)
-import qualified Data.HashMap.Strict        as M
+import           Data.HashMap.Strict (HashMap)
+import           Data.HashMap.Strict.InsOrd (InsOrdHashMap)
+import qualified Data.HashMap.Strict.InsOrd as OM
+import qualified Data.HashMap.Strict as HM
 import           Data.Semigroup
 import           Data.Monoid (Monoid)
 import           Data.Text                  (Text)
@@ -79,7 +81,7 @@ import qualified Data.Text.IO               as T
 import           Prelude                    hiding (takeWhile)
 
 -- | An INI configuration.
-newtype Ini = Ini { unIni :: HashMap Text (HashMap Text Text) }
+newtype Ini = Ini { unIni :: InsOrdHashMap Text (HashMap Text Text) }
   deriving (Show, Semigroup, Monoid)
 
 -- | Parse an INI file.
@@ -93,23 +95,23 @@ parseIni = parseOnly iniParser
 -- | Lookup values in the config.
 lookupValue :: Text -> Text -> Ini -> Either String Text
 lookupValue name key (Ini ini) =
-  case M.lookup name ini of
+  case OM.lookup name ini of
     Nothing -> Left ("Couldn't find section: " ++ T.unpack name)
     Just section ->
-      case M.lookup key section of
+      case HM.lookup key section of
         Nothing -> Left ("Couldn't find key: " ++ T.unpack key)
         Just value -> return value
 
 -- | Get the sections in the config.
 sections :: Ini -> [Text]
-sections (Ini ini) = M.keys ini
+sections (Ini ini) = OM.keys ini
 
 -- | Get the keys in a section.
 keys :: Text -> Ini -> Either String [Text]
 keys name (Ini ini) =
-  case M.lookup name ini of
+  case OM.lookup name ini of
     Nothing -> Left ("Couldn't find section: " ++ T.unpack name)
-    Just section -> Right (M.keys section)
+    Just section -> Right (HM.keys section)
 
 -- | Read a value using a reader from "Data.Text.Read".
 readValue :: Text -> Text -> (Text -> Either String (a, Text))
@@ -157,10 +159,10 @@ writeIniFileWith wis fp = T.writeFile fp . printIniWith wis
 -- | Print an INI config.
 printIniWith :: WriteIniSettings -> Ini -> Text
 printIniWith wis (Ini ini) =
-  T.concat (map buildSection (M.toList ini))
+  T.concat (map buildSection (OM.toList ini))
   where buildSection (name,pairs) =
           "[" <> name <> "]\n" <>
-          T.concat (map buildPair (M.toList pairs))
+          T.concat (map buildPair (HM.toList pairs))
         buildPair (name,value) =
           name <> separator <> value <> "\n"
         separator = case writeIniKeySeparator wis of
@@ -169,7 +171,7 @@ printIniWith wis (Ini ini) =
 
 -- | Parser for an INI.
 iniParser :: Parser Ini
-iniParser = fmap (Ini . M.fromList) (many sectionParser)
+iniParser = fmap (Ini . OM.fromList) (many sectionParser)
 
 -- | A section. Format: @[foo]@. Conventionally, @[FOO]@.
 sectionParser :: Parser (Text,HashMap Text Text)
@@ -182,7 +184,7 @@ sectionParser =
      _ <- char ']'
      skipEndOfLine
      values <- many keyValueParser
-     return (T.strip name, M.fromList values)
+     return (T.strip name, HM.fromList values)
 
 -- | A key-value pair. Either @foo: bar@ or @foo=bar@.
 keyValueParser :: Parser (Text,Text)

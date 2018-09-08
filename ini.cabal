@@ -21,7 +21,8 @@ library
   build-depends:     base >= 4 && <5,
                      attoparsec,
                      text,
-                     unordered-containers
+                     unordered-containers,
+                     insert-ordered-containers
   if !impl(ghc >= 8)
     build-depends: semigroups >= 0.10 && < 0.19
 
